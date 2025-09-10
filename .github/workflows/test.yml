@@ -1,6 +1,6 @@
 # inspired by this example repository https://github.com/jonhoo/rust-ci-conf
 permissions:
-  content: read
+  contents: read
 
 on:
   push:
