@@ -6,6 +6,8 @@ mod private {
 
 impl private::Sealed for u8 {}
 impl private::Sealed for u16 {}
+impl private::Sealed for u32 {}
+impl private::Sealed for u64 {}
 
 pub type Nibble = u8;
 
@@ -45,6 +47,51 @@ macro_rules! impl_readable_bit {
 
 impl_readable_bit!(u8);
 impl_readable_bit!(u16);
+impl_readable_bit!(u32);
+impl_readable_bit!(u64);
+
+pub trait SetableBit: HiBit + private::Sealed {
+    fn set_bit(&mut self, pos: usize);
+}
+
+macro_rules! impl_setable_bit {
+    ($s:ty) => {
+        impl SetableBit for $s {
+            fn set_bit(&mut self, pos: usize) {
+                assert!(Self::hi_bit_idx() >= pos);
+                *self |= (1 << pos);
+            }
+        }
+    };
+}
+
+impl_setable_bit!(u8);
+impl_setable_bit!(u16);
+impl_setable_bit!(u32);
+impl_setable_bit!(u64);
+
+pub trait SetableBits: HiBit + private::Sealed {
+    fn set_bits(&mut self, start: usize, end: usize);
+}
+
+macro_rules! impl_setable_bits {
+    ($s:ty) => {
+        impl SetableBits for $s {
+            fn set_bits(&mut self, start: usize, end: usize) {
+                let hi_bit_idx = Self::hi_bit_idx();
+                assert!(start < end, "start cant be greater or equal to end");
+                assert!(end <= hi_bit_idx, "end is out of bounds");
+                let m_l = hi_bit_idx - end;
+                let m_r = m_l + start;
+                let mask = ((<$s>::MAX << m_l) >> m_r) << start;
+                *self |= mask;
+            }
+        }
+    };
+}
+
+impl_setable_bits!(u8);
+impl_setable_bits!(u16);
 
 /// read a range of bits starting from bit index `start` up to and including
 /// `end` returning it as a `T`.
@@ -89,6 +136,8 @@ macro_rules! impl_hi_bit {
 
 impl_hi_bit!(u8, 7);
 impl_hi_bit!(u16, 15);
+impl_hi_bit!(u32, 31);
+impl_hi_bit!(u64, 63);
 
 /// unified API for reading data in big endian
 /// order
@@ -144,6 +193,7 @@ pub trait ReadsIntoBytes: private::Sealed {
     fn read_from_u64(n: u64) -> [u8; 8];
 }
 
+/// read primitiv number type into byte array with BE ordering
 impl ReadsIntoBytes for BigEndian {
     fn read_from_u16(n: u16) -> [u8; 2] {
         n.to_be_bytes()
@@ -158,6 +208,7 @@ impl ReadsIntoBytes for BigEndian {
     }
 }
 
+/// read primitiv number type into byte array with LE ordering
 impl ReadsIntoBytes for LittleEndian {
     fn read_from_u16(n: u16) -> [u8; 2] {
         n.to_le_bytes()
@@ -174,7 +225,10 @@ impl ReadsIntoBytes for LittleEndian {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes, ReadsIntoBytes};
+    use crate::{
+        BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes, ReadsIntoBytes, SetableBit,
+        SetableBits,
+    };
 
     #[test]
     fn bits_readable() {
@@ -200,5 +254,24 @@ mod tests {
     fn read_into_bytes_le() {
         let val_u16: u16 = 0xAABB;
         assert_eq!(LittleEndian::read_from_u16(val_u16), [0xBB, 0xAA]);
+        let val_u32: u32 = 0xAABBCCDD;
+        assert_eq!(
+            LittleEndian::read_from_u32(val_u32),
+            [0xDD, 0xCC, 0xBB, 0xAA]
+        );
+    }
+
+    #[test]
+    fn set_bit() {
+        let mut val_u8: u8 = 0;
+        val_u8.set_bit(2);
+        assert_eq!(val_u8, 4);
+    }
+
+    #[test]
+    fn set_bits() {
+        let mut val_u8 = 0u8;
+        val_u8.set_bits(1, 3);
+        assert_eq!(val_u8, 14);
     }
 }
