@@ -1,0 +1,31 @@
+# inspired by this example repository https://github.com/jonhoo/rust-ci-conf
+permissions:
+  content: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+name: test
+jobs:
+  required:
+    runs-on: ubuntu-latest
+    name: ubuntu / ${{ matrix.toolchain }}
+    strategy:
+      matrix:
+        # also run tests with beta toolchain to be aware of
+        # coming breaking changes to the rust toolchain
+        toolchain: [stable,beta]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: run tests
+        run: cargo test

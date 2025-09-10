@@ -1,0 +1,42 @@
+# inspired by this example repository https://github.com/jonhoo/rust-ci-conf
+permissions:
+  content: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+name: check
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    name: stable / fmt
+    steps:
+      - uses: actions/checkout@v5
+      - name: install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: check format
+        run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    name: clippy / stable
+    steps:
+      - uses: actions/checkout@v5
+      - name: install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+      - name: check lint
+        run: cargo clippy --all-targets --all-features
+        
+
