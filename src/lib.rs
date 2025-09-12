@@ -226,8 +226,8 @@ impl ReadsIntoBytes for LittleEndian {
 #[cfg(test)]
 mod tests {
     use crate::{
-        BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes, ReadsIntoBytes, SetableBit,
-        SetableBits,
+        BigEndian, BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes, ReadsIntoBytes,
+        SetableBit, SetableBits,
     };
 
     #[test]
@@ -242,12 +242,20 @@ mod tests {
         let val_u8: u8 = 0b0001_0000;
         assert_eq!(val_u8.read_bit(4), 1);
         assert_eq!(val_u8.read_bit(3), 0);
+        let val_u16: u16 = 0x0100;
+        assert_eq!(val_u16.read_bit(8), 1);
+        let val_u32: u32 = 0x00010000;
+        assert_eq!(val_u32.read_bit(16), 1);
     }
 
     #[test]
     fn read_from_bytes_le() {
-        let bytes_u16: [u8; 2] = [0xAA, 0xBB];
-        assert_eq!(LittleEndian::read_into_u16(bytes_u16), 0xBBAA);
+        let val_u16: [u8; 2] = [0xAA, 0xBB];
+        assert_eq!(LittleEndian::read_into_u16(val_u16), 0xBBAA);
+        let val_u32: [u8; 4] = [0xAA, 0xBB, 0xCC, 0xDD];
+        assert_eq!(LittleEndian::read_into_u32(val_u32), 0xDDCCBBAA);
+        let val_u64: [u8; 8] = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];
+        assert_eq!(LittleEndian::read_into_u64(val_u64), 0x7766554433221100);
     }
 
     #[test]
@@ -259,6 +267,27 @@ mod tests {
             LittleEndian::read_from_u32(val_u32),
             [0xDD, 0xCC, 0xBB, 0xAA]
         );
+    }
+
+    #[test]
+    fn read_from_bytes_be() {
+        let val_u16: [u8; 2] = [0xAA, 0xBB];
+        assert_eq!(BigEndian::read_into_u16(val_u16), 0xAABB);
+        let val_u32: [u8; 4] = [0xAA, 0xBB, 0xCC, 0xDD];
+        assert_eq!(BigEndian::read_into_u32(val_u32), 0xAABBCCDD);
+    }
+
+    #[test]
+    fn read_into_bytes_be() {
+        let val_u16: u16 = 0xAABB;
+        assert_eq!(BigEndian::read_from_u16(val_u16), [0xAA, 0xBB]);
+        let val_u32: u32 = 0xAABBCCDD;
+        assert_eq!(BigEndian::read_from_u32(val_u32), [0xAA, 0xBB, 0xCC, 0xDD]);
+        let val_u64: u64 = 0x0011223344556677;
+        assert_eq!(
+            BigEndian::read_from_u64(val_u64),
+            [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
+        )
     }
 
     #[test]
