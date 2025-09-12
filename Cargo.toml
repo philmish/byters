@@ -2,5 +2,10 @@
 name = "byters"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "some small quality of life utilities to work with bits."
+repository = "https://github.com/philmish/byters"
+homepage = "https://github.com/philmish/byters"
+readme = "README.md"
 
 [dependencies]
