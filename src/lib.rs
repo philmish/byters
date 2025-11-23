@@ -69,6 +69,7 @@ pub type BytersResult<T> = Result<T, BytersError>;
 /// the `Bits` trait, starting from the least significant bit.
 /// enforces validity of the offset at creation of the
 /// `BitOffset`.
+#[derive(Clone, Copy)]
 pub struct BitOffset<T: Bits> {
     pub(crate) pos: usize,
     phantomdata: PhantomData<T>,
@@ -102,6 +103,7 @@ where
 /// trait, from the offset `start` up to and including the
 /// bit at offset `end`.
 /// ensures the validity of the range during creation.
+#[derive(Clone, Copy)]
 pub struct BitRange<T: Bits> {
     pub(crate) start: usize,
     pub(crate) end: usize,
