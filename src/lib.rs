@@ -2,6 +2,8 @@ use std::marker::PhantomData;
 
 use private::Sealed;
 
+/// helper trait to seal implementation of internal
+/// traits from outside sources
 mod private {
     pub trait Sealed {}
 }
@@ -27,12 +29,16 @@ impl Byte for u8 {
     }
 }
 
-/// defines the maximum bit offset for a type which
+/// trait used as a base for reading and setting bits
+/// all types which implement this trait treat positions
+/// and ranges of bits as an offset from the least significant
+/// bit.
+/// the trait defines the maximum bit offset for a type which
 /// can be read as a series of bits.
-/// this trait can not be implemented by any other type.
 pub trait Bits: Sized + private::Sealed {
     /// max. offset from the least significant bit
     const MAX_BIT_OFFSET: usize;
+    /// all bits in the implementing type set to `1`
     const MAX_MASK: Self;
 }
 
@@ -60,14 +66,17 @@ pub enum BytersError {
 pub type BytersResult<T> = Result<T, BytersError>;
 
 /// the position of a bit in a type T which implements
-/// the `HiBit` trait.
-/// Ensures position validity on initialization.
-pub struct BitPos<T: Bits> {
+/// the `Bits` trait.
+/// used to ensure the validity of the created position
+/// during creation.
+pub struct BitOffset<T: Bits> {
     pub(crate) pos: usize,
     phantomdata: PhantomData<T>,
 }
 
-impl<T> BitPos<T>
+/// bit positions can be created for all types which implement the
+/// `Bits` trait.
+impl<T> BitOffset<T>
 where
     T: Bits,
 {
@@ -75,7 +84,7 @@ where
     /// the bounds of the bits of Type `T`.
     /// Returns a `BitPositionBound` error if the passed
     /// `p` exceeds the max. bit offset for Type `T`.
-    pub fn new(p: usize) -> BytersResult<BitPos<T>> {
+    pub fn new(p: usize) -> BytersResult<BitOffset<T>> {
         if p > T::MAX_BIT_OFFSET {
             return Err(BytersError::BitPositionBound {
                 given: p,
@@ -89,6 +98,9 @@ where
     }
 }
 
+/// range of bits in a type implementing the `Bits`
+/// trait.
+/// ensures the validity of the range during creation.
 pub struct BitRange<T: Bits> {
     pub(crate) start: usize,
     pub(crate) end: usize,
@@ -116,26 +128,30 @@ where
         })
     }
 
+    /// shift left value used to set all hi bits
+    /// for the mask to extract the range from the `MAX_MASK`
+    /// of the type `T` to `0`
     pub(crate) fn mask_lshift(&self) -> usize {
         T::MAX_BIT_OFFSET - self.end
     }
 
+    /// shift right value used to set all lo bits
+    /// of the `mask_lshift` to
     pub(crate) fn mask_rshift(&self) -> usize {
         self.mask_lshift() + self.start
     }
 }
 
-/// a type which implement `Bits` can read a bit
-/// at position `pos`.
-/// the validity of the position is enforced on the type level
+/// a single bit at position `pos` can be read from every type
+/// which implements the `Bits` trait.
 pub trait ReadableBit: Bits {
-    fn read_bit(&self, pos: BitPos<Self>) -> u8;
+    fn read_bit(&self, pos: BitOffset<Self>) -> u8;
 }
 
 macro_rules! impl_readable_bit {
     ($s:ty) => {
         impl ReadableBit for $s {
-            fn read_bit(&self, pos: BitPos<$s>) -> u8 {
+            fn read_bit(&self, pos: BitOffset<$s>) -> u8 {
                 ((self >> pos.pos) & 1) as u8
             }
         }
@@ -148,13 +164,13 @@ impl_readable_bit!(u32);
 impl_readable_bit!(u64);
 
 pub trait SetableBit: Bits {
-    fn set_bit(&mut self, pos: BitPos<Self>);
+    fn set_bit(&mut self, pos: BitOffset<Self>);
 }
 
 macro_rules! impl_setable_bit {
     ($s:ty) => {
         impl SetableBit for $s {
-            fn set_bit(&mut self, pos: BitPos<$s>) {
+            fn set_bit(&mut self, pos: BitOffset<$s>) {
                 *self |= (1 << pos.pos);
             }
         }
@@ -184,6 +200,8 @@ macro_rules! impl_setable_bits {
 
 impl_setable_bits!(u8);
 impl_setable_bits!(u16);
+impl_setable_bits!(u32);
+impl_setable_bits!(u64);
 
 /// read a range of bits starting from bit index `start` up to and including
 /// `end` returning it as a `T`.
@@ -209,13 +227,11 @@ impl_bits_readable_as!(u16, u8);
 /// unified API for reading data in big endian
 /// order
 pub struct BigEndian {}
-
 impl Sealed for BigEndian {}
 
 /// unified API for reading data in little endian
 /// order
 pub struct LittleEndian {}
-
 impl Sealed for LittleEndian {}
 
 /// wrapper trait for reading bytes as primitiv number types
@@ -239,6 +255,8 @@ impl ReadsFromBytes for BigEndian {
     }
 }
 
+/// read primitive number types from byte array
+/// with little endian ordering
 impl ReadsFromBytes for LittleEndian {
     fn read_into_u16(bytes: [u8; 2]) -> u16 {
         u16::from_le_bytes(bytes)
@@ -293,7 +311,7 @@ impl ReadsIntoBytes for LittleEndian {
 #[cfg(test)]
 mod tests {
     use crate::{
-        BigEndian, BitPos, BitRange, BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes,
+        BigEndian, BitOffset, BitRange, BitsReadableAs, LittleEndian, ReadableBit, ReadsFromBytes,
         ReadsIntoBytes, SetableBit, SetableBits,
     };
 
@@ -308,14 +326,14 @@ mod tests {
     #[test]
     fn bit_readable() {
         let val_u8: u8 = 0b0001_0000;
-        let pos_4_u8 = BitPos::<u8>::new(4).unwrap();
-        let pos_3_u8 = BitPos::<u8>::new(3).unwrap();
+        let pos_4_u8 = BitOffset::<u8>::new(4).unwrap();
+        let pos_3_u8 = BitOffset::<u8>::new(3).unwrap();
         assert_eq!(val_u8.read_bit(pos_4_u8), 1);
         assert_eq!(val_u8.read_bit(pos_3_u8), 0);
-        let pos_8_u16 = BitPos::<u16>::new(8).unwrap();
+        let pos_8_u16 = BitOffset::<u16>::new(8).unwrap();
         let val_u16: u16 = 0x0100;
         assert_eq!(val_u16.read_bit(pos_8_u16), 1);
-        let pos_16_u32 = BitPos::<u32>::new(16).unwrap();
+        let pos_16_u32 = BitOffset::<u32>::new(16).unwrap();
         let val_u32: u32 = 0x00010000;
         assert_eq!(val_u32.read_bit(pos_16_u32), 1);
     }
@@ -339,6 +357,11 @@ mod tests {
             LittleEndian::read_from_u32(val_u32),
             [0xDD, 0xCC, 0xBB, 0xAA]
         );
+        let val_u64: u64 = 0x0011223344556677;
+        assert_eq!(
+            LittleEndian::read_from_u64(val_u64),
+            [0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00]
+        );
     }
 
     #[test]
@@ -347,6 +370,8 @@ mod tests {
         assert_eq!(BigEndian::read_into_u16(val_u16), 0xAABB);
         let val_u32: [u8; 4] = [0xAA, 0xBB, 0xCC, 0xDD];
         assert_eq!(BigEndian::read_into_u32(val_u32), 0xAABBCCDD);
+        let val_u64: [u8; 8] = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];
+        assert_eq!(BigEndian::read_into_u64(val_u64), 0x0011223344556677)
     }
 
     #[test]
@@ -359,12 +384,12 @@ mod tests {
         assert_eq!(
             BigEndian::read_from_u64(val_u64),
             [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
-        )
+        );
     }
 
     #[test]
     fn set_bit() {
-        let pos_2_u8 = BitPos::<u8>::new(2).unwrap();
+        let pos_2_u8 = BitOffset::<u8>::new(2).unwrap();
         let mut val_u8: u8 = 0;
         val_u8.set_bit(pos_2_u8);
         assert_eq!(val_u8, 4);
