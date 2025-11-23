@@ -65,16 +65,16 @@ pub enum BytersError {
 /// generic `Result` type for the `byters` crate
 pub type BytersResult<T> = Result<T, BytersError>;
 
-/// the position of a bit in a type T which implements
-/// the `Bits` trait.
-/// used to ensure the validity of the created position
-/// during creation.
+/// offset into the bits of a type `T` which implements
+/// the `Bits` trait, starting from the least significant bit.
+/// enforces validity of the offset at creation of the
+/// `BitOffset`.
 pub struct BitOffset<T: Bits> {
     pub(crate) pos: usize,
     phantomdata: PhantomData<T>,
 }
 
-/// bit positions can be created for all types which implement the
+/// implementation for `BitOffset` for every type implementing the
 /// `Bits` trait.
 impl<T> BitOffset<T>
 where
@@ -91,15 +91,16 @@ where
                 max: T::MAX_BIT_OFFSET,
             });
         }
-        return Ok(Self {
+        Ok(Self {
             pos: p,
             phantomdata: PhantomData,
-        });
+        })
     }
 }
 
-/// range of bits in a type implementing the `Bits`
-/// trait.
+/// range of bits in a type `T` which implements the `Bits`
+/// trait, from the offset `start` up to and including the
+/// bit at offset `end`.
 /// ensures the validity of the range during creation.
 pub struct BitRange<T: Bits> {
     pub(crate) start: usize,
@@ -388,18 +389,38 @@ mod tests {
     }
 
     #[test]
+    fn bit_offset_validation() {
+        let invalid_u8 = BitOffset::<u8>::new(8);
+        assert!(invalid_u8.is_err());
+        let invalid_u16 = BitOffset::<u16>::new(16);
+        assert!(invalid_u16.is_err());
+        let invalid_u32 = BitOffset::<u32>::new(32);
+        assert!(invalid_u32.is_err());
+        let invalid_u64 = BitOffset::<u64>::new(64);
+        assert!(invalid_u64.is_err())
+    }
+
+    #[test]
     fn set_bit() {
-        let pos_2_u8 = BitOffset::<u8>::new(2).unwrap();
+        let offset_2_u8 = BitOffset::<u8>::new(2).unwrap();
         let mut val_u8: u8 = 0;
-        val_u8.set_bit(pos_2_u8);
+        val_u8.set_bit(offset_2_u8);
         assert_eq!(val_u8, 4);
+        let offset_8_u16 = BitOffset::<u16>::new(8).unwrap();
+        let mut val_u16 = 0u16;
+        val_u16.set_bit(offset_8_u16);
+        assert_eq!(val_u16, 256)
     }
 
     #[test]
     fn set_bits() {
         let mut val_u8 = 0u8;
-        let r = BitRange::<u8>::new(1, 3).unwrap();
-        val_u8.set_bits(r);
+        let r_u8 = BitRange::<u8>::new(1, 3).unwrap();
+        val_u8.set_bits(r_u8);
         assert_eq!(val_u8, 14);
+        let mut val_u16 = 0u16;
+        let r_u16 = BitRange::<u16>::new(8, 15).unwrap();
+        val_u16.set_bits(r_u16);
+        assert_eq!(val_u16, 0xFF00)
     }
 }
